@@ -1,0 +1,47 @@
+name: CI
+
+# libui 后端：真正的回归面在 macOS 与 Windows 两种原生后端上。
+# 跑：桩测 + 不开窗的真控件冒烟；GUI 模式（真窗口）留给人工。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: citrine-native-libui
+    steps:
+      # 三个仓库同级：citrine（核心框架）、citrine-native（核心包）、本仓
+      - uses: actions/checkout@v7
+        with:
+          repository: ShiningRay/citrine
+          path: citrine
+      - uses: actions/checkout@v7
+        with:
+          repository: ShiningRay/citrine-native
+          path: citrine-native
+      - uses: actions/checkout@v7
+        with:
+          path: citrine-native-libui
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+          working-directory: citrine-native-libui
+
+      - name: 桩测 + 真控件冒烟（不开窗）
+        run: bundle exec rake

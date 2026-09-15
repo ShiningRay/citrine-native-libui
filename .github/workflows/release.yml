@@ -1,0 +1,71 @@
+name: Release
+
+# RubyGems Trusted Publishing（OIDC）：打 v* 标签即无 secret 构建发布。
+# 门禁与 citrine-native（核心）同矩阵：macOS + Windows（ubuntu 上 libui 起不来）。
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  gate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: citrine-native-libui
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: ShiningRay/citrine
+          path: citrine
+      - uses: actions/checkout@v7
+        with:
+          path: citrine-native-libui
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+          working-directory: citrine-native-libui
+
+      - name: 发布门禁（与 CI 对齐：桩测 + 不开窗的真控件冒烟）
+        run: bundle exec rake
+
+  gem:
+    needs: gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write # Trusted Publishing（OIDC）必需
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+
+      - name: 校验标签与 VERSION 一致
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(ruby -r./lib/citrine/native/libui/version -e 'print Citrine::Native::Libui::VERSION')"
+          if [ "$tag" != "$version" ]; then
+            echo "标签 $GITHUB_REF_NAME 与 VERSION $version 不一致" >&2
+            exit 1
+          fi
+
+      - name: 构建 gem
+        run: gem build citrine-native-libui.gemspec
+
+      - name: 附产物到 GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: citrine-native-libui-*.gem
+
+      - name: 配置 Trusted Publishing 凭据（OIDC）
+        uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
+
+      - name: 发布到 RubyGems（gem push，OIDC 凭据，无需 API key）
+        run: gem push citrine-native-libui-*.gem

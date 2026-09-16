@@ -306,6 +306,15 @@ module Citrine
           subscribe(control, :change, &block)
         end
 
+        # libui 的 entry 不暴露按键（uiEntry 无回车回调，见
+        # docs/design/element-event-matrix.md 的清单）——warn-once 后忽略，
+        # 跨后端应用（GTK/浏览器有回车提交语义）在 libui 侧不炸
+        def on_enter(control, &_block)
+          warn_unsupported_once(:on_enter,
+                                "text_input 的 on_enter 在 libui 后端不触发"                                 "（uiEntry 不暴露按键，回车提交不可用）")
+          nil
+        end
+
         # ── 自绘面板（area，设计 2.1/2.3）───────────────────────
         #
         # 三条实测结论（GOALS 变更日志 NA-1）：
@@ -394,6 +403,21 @@ module Citrine
         def on_area_key(area, &block) = subscribe(area, :key, &block)
         def on_area_crossed(area, &block) = subscribe(area, :crossed, &block)
         def on_area_drag_broken(area, &block) = subscribe(area, :drag_broken, &block)
+
+        # uiArea 不投递滚轮（能力边界，不是进度）——warn-once 后忽略
+        def on_area_wheel(_area, &_block)
+          warn_unsupported_once(:on_wheel,
+                                "on_wheel 在 libui 后端永不触发（uiArea 不投递滚轮，"                                 "见 docs/design/element-event-matrix.md）")
+          nil
+        end
+
+        def warn_unsupported_once(key, message)
+          @unsupported_warned ||= {}
+          return if @unsupported_warned[key]
+
+          @unsupported_warned[key] = true
+          warn "[citrine-native-libui] " + message + "，已忽略"
+        end
 
         # 诊断（冒烟用）：窗口是不是 key window（设计 2.3 的键盘前提——
         # uiControlShow 之后不是，必须 activate；这条断言就是那个结论的机器可验证形式）
@@ -1007,14 +1031,10 @@ module Citrine
         end
 
         # 回调体一律不把异常抛回 C/Objective-C 栈（Fiddle 闭包里抛出会走未定义路径，
-        # 轻则丢事件重则崩进程）；代价是这里"只报不抛"：事件处理器里的异常打到
-        # stderr 并继续跑主循环，而不是把整个 GUI 带走。
+        # 轻则丢事件重则崩进程）。输出格式与策略在核心 EventGuard 单点维护，
+        # 与 GTK 后端同口径：事件处理器里的异常打到 stderr 并继续跑主循环。
         def safe(context)
-          yield
-        rescue StandardError => e
-          warn "[citrine-native] #{context} 抛出 #{e.class}: #{e.message}"
-          warn(e.backtrace.first(8).map { |line| "    #{line}" }.join("\n"))
-          nil
+          Citrine::Native::EventGuard.guard(context) { yield }
         end
       end
     end

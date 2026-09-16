@@ -113,9 +113,10 @@ class ElementEventMatrixTest < NativeTest
     refute_match(/事件/, err, "声明支持的事件不该被提醒")
   end
 
-  # area 的事件面就是设计文档冻结的那六个（多一个都要有实现与文档）
+  # area 的事件面就是设计文档冻结的那七个（多一个都要有实现与文档）
+  # （v3：on_wheel 回归核心事件面；libui 适配层 warn-once，见矩阵表）
   def test_area_event_surface_is_frozen
-    assert_equal %i[on_draw on_click on_mouse_down on_mouse_up on_mouse_move on_key].sort,
+    assert_equal %i[on_draw on_click on_mouse_down on_mouse_up on_mouse_move on_key on_wheel].sort,
                  Renderer::SUPPORTED_EVENTS[:area].sort
   end
 end

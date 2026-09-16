@@ -21,6 +21,9 @@
 | D-9 | **E4：Windows 侧的 Win32 桥**（`AreaHandle#focus` 真实现、窗口最小尺寸） | Windows 上两者如实降级（点击即给焦点，所以目前不紧急） | ① 按 ObjcBridge 的可用性模式加 `Win32Bridge` ② 不做 | **②**——直到出现"挂载自动聚焦要在 Windows 成立"这类需求 | 中；需要新的桥 + 平台矩阵两列同步 |
 | D-10 | **F10：多窗口的后端绑定**（`Citrine::Native.active_widgets` 是全局单值） | "一进程一 App" 假设继续（文档已写明） | ① 加 `every(ms, backend:)` 显式绑定 ② 不做 | **②**——没有多窗口需求 | 小到中；但会动定时器 API |
 | D-11 | **sheets 的 `⌘B` 只能加粗、不能取消**（读不存在的 `@active_row/@active_col`，属**共享逻辑**缺陷） | 用户按第二次没法取消加粗；浏览器侧同病 | ① 修共享逻辑（顺带修浏览器侧）② 只修原生侧 ③ 保留 | **① 排在有验收窗口时**——改共享逻辑要跑浏览器侧的 parity 测试 | 中；动的是两个渲染器共享的代码 |
+| D-12 | **样式/事件能力表按后端参数化**（StyleMatrix 与 SUPPORTED_EVENTS 是核心静态表，两后端共用一份） | GTK 能 CSS 着色却仍按 libui 口径提醒"原生控件无法着色"；后端无法声明自己的事件扩展（on_enter 之前接不进正是此因） | ① 把「元素×事件×样式」做成 per-backend 能力表（Widgets/Painter 协议的 `required`+缺省抛错先例可沿用），dev 提醒按后端能力说话 ② 维持静态表 | **①**——on_enter/on_wheel 已被迫在核心层留了"warn-once 空操作"的口子，能力表是它的正规化 | 中大；动 StyleMatrix 语义与全部提醒口径，需要两后端逐条对拍 |
+| D-13 | **浮层宿主（overlay layer）**：`position/z_index/overflow` 全 `:ignored`、box 顺序即层序、portal 只能落根容器末尾 | beryl L2 的 tooltip/下拉/modal/auto_dismiss 在原生侧没有宿主概念——这是"同一份 beryl 组件跑原生"最大的一堵墙 | ① portal 扩成"命名 overlay 层"（弹层内容挂到窗口级覆盖容器，GTK 用 EventBox+CSS 路径）② 不做，per-target 视图继续手写 | **① 排在 beryl L2 要上原生时**；libui 受"area 不能嵌原生控件"天花板限制，优先 GTK | 大；动窗口装配与 portal 语义，需独立验收窗口 |
+| D-14 | **闭包生命周期契约统一**：libui `@closures` 对订阅类只增不清（控件销毁后闭包常驻）；GTK 用 `@signal_blocks` 销毁时整组释放 | 长会话多窗口下的闭包积压口径不一；两边各自演化出私有实现 | ① 抽"订阅/闭包随控件销毁"的 Widgets 层契约（登记/释放钩子进 Base）② 维持各自实现 | **② 现在**（两后端行为都正确，只是不统一）；**① 随 D-12 一起做**（能力表重构时顺路统一簿记） | 小到中；动后端内部，不动应用 API |
 
 ## 待修（影响体验，但不阻塞"能跑"）
 
